@@ -174,7 +174,7 @@ extern "C" {
         return init();
     }
     
-    __declspec(dllexport) void update(float deltaTime) {
+    __declspec(dllexport) void updateFrame(float deltaTime) {
         ::BMFG_Export_obj::updateFrame(deltaTime);
     }
     
@@ -224,6 +224,10 @@ extern "C" {
     
     __declspec(dllexport) void setWindowSizeAndBorderless(int width, int height) {
         ::BMFG_Export_obj::engineSetWindowSizeAndBorderless(width, height);
+    }
+
+    __declspec(dllexport) void onMouseClick(int x, int y) {
+        ::BMFG_Export_obj::onMouseClick(x, y);
     }
 }
 ')
@@ -463,6 +467,13 @@ class BMFG_Export {
         if (app != null && initialized && app.window != null) {
             //app.window.setSize(width, height);
             //app.window.setBorderless(true);
+        }
+    }
+
+    @:keep
+    public static function onMouseClick(x:Int, y:Int):Void {
+        if (app != null && initialized && app.window != null) {
+            trace("Mouse click at: " + x + ", " + y);
         }
     }
 }
