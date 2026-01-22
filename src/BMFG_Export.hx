@@ -1,0 +1,468 @@
+package;
+
+/**
+ * BMFG_Export class - DLL entry point and API for C# integration
+ * Exposes the font baking engine as a DLL for external applications
+ */
+
+// Declare C exports at header level (global scope)
+@:headerCode('
+// Callback typedef for C# to receive messages
+typedef void (*EngineCallback)(const char* message);
+
+extern "C" {
+    __declspec(dllexport) const char* HxcppInit();
+    __declspec(dllexport) void HxcppThreadAttach();
+    __declspec(dllexport) void HxcppThreadDetach();
+    __declspec(dllexport) void HxcppGarbageCollect(bool major);
+    __declspec(dllexport) void testConsole();
+    
+    __declspec(dllexport) void setCallback(EngineCallback callback);
+    __declspec(dllexport) int init();
+    __declspec(dllexport) int initWithCallback(EngineCallback callback);
+    __declspec(dllexport) void update(float deltaTime);
+    __declspec(dllexport) void render();
+    __declspec(dllexport) void swapBuffers();
+    __declspec(dllexport) void shutdownEngine();
+    __declspec(dllexport) void release();
+    __declspec(dllexport) void loadState(int stateIndex);
+    __declspec(dllexport) int isRunning();
+    __declspec(dllexport) int getWindowWidth();
+    __declspec(dllexport) int getWindowHeight();
+    __declspec(dllexport) void setWindowSize(int width, int height);
+    __declspec(dllexport) void* getWindowHandle();
+    __declspec(dllexport) void setWindowPosition(int x, int y);
+    __declspec(dllexport) void setWindowSizeAndBorderless(int width, int height);
+}
+')
+
+// Implement the C exports
+@:cppFileCode('
+#include <hx/Thread.h>
+#include <windows.h>
+#include <io.h>
+#include <fcntl.h>
+#include <stdio.h>
+
+// Callback typedef for C# to receive messages
+typedef void (*EngineCallback)(const char* message);
+
+static bool hxcpp_initialized = false;
+static hx::AutoGCFreeZone *mainZone = NULL;
+static bool console_redirected = false;
+static EngineCallback g_callback = nullptr;
+
+void RedirectConsole() {
+    if (console_redirected) return;
+    
+    // Allocate console
+    if (!AllocConsole()) {
+        // Console might already exist, try to attach
+        if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
+            return;
+        }
+    }
+    
+    // Redirect stdout
+    FILE* fpStdout = nullptr;
+    freopen_s(&fpStdout, "CONOUT$", "w", stdout);
+    
+    // Redirect stderr  
+    FILE* fpStderr = nullptr;
+    freopen_s(&fpStderr, "CONOUT$", "w", stderr);
+    
+    // Redirect stdin
+    FILE* fpStdin = nullptr;
+    freopen_s(&fpStdin, "CONIN$", "r", stdin);
+    
+    // Disable buffering
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+    
+    console_redirected = true;
+    
+    printf("========================================\\n");
+    printf("DLL Console Initialized\\n");
+    printf("========================================\\n");
+    fflush(stdout);
+}
+
+// Custom trace function that writes directly to console and callback
+void EngineTrace(const char* msg) {
+    if (!console_redirected) RedirectConsole();
+    printf("[HAXE] %s\\n", msg);
+    fflush(stdout);
+    
+    // Also send to C# callback if registered
+    if (g_callback != nullptr) {
+        g_callback(msg);
+    }
+}
+
+extern "C" {
+    // Set callback function for C# to receive messages
+    __declspec(dllexport) void setCallback(EngineCallback callback) {
+        g_callback = callback;
+        if (callback != nullptr) {
+            EngineTrace("Callback registered successfully");
+        }
+    }
+    
+    // Test function to verify console output
+    __declspec(dllexport) void testConsole() {
+        RedirectConsole();
+        printf("TEST: Console is working!\\n");
+        fflush(stdout);
+        EngineTrace("TEST: EngineTrace is working!");
+    }
+    
+    // Haxe runtime initialization
+    __declspec(dllexport) const char* HxcppInit() {
+        if (hxcpp_initialized) {
+            return NULL;  // Already initialized
+        }
+        
+        // Redirect console first
+        RedirectConsole();
+        
+        const char* err = hx::Init();
+        if (err == NULL) {
+            hxcpp_initialized = true;
+            printf("Haxe runtime initialized\\n");
+        } else {
+            printf("Haxe init error: %s\\n", err);
+        }
+        return err;  // Returns NULL on success, error message on failure
+    }
+    
+    __declspec(dllexport) void HxcppThreadAttach() {
+        hx::SetTopOfStack((int*)0, true);
+    }
+    
+    __declspec(dllexport) void HxcppThreadDetach() {
+        hx::SetTopOfStack((int*)0, false);
+    }
+    
+    __declspec(dllexport) void HxcppGarbageCollect(bool major) {
+        // Trigger garbage collection
+        extern void __hxcpp_collect(bool inMajor);
+        __hxcpp_collect(major);
+    }
+    
+    // Engine API - these use NativeAttach scope guards
+    __declspec(dllexport) int init() {
+        // Ensure runtime is initialized first
+        if (!hxcpp_initialized) {
+            const char* err = hx::Init();
+            if (err != NULL) return 0;
+            hxcpp_initialized = true;
+        }
+        
+        // Use NativeAttach to properly set up the thread
+        hx::NativeAttach attach;
+        return ::BMFG_Export_obj::init();
+    }
+    
+    __declspec(dllexport) int initWithCallback(EngineCallback callback) {
+        // Set callback first
+        g_callback = callback;
+        if (callback != nullptr) {
+            EngineTrace("Callback registered");
+        }
+        
+        // Then initialize
+        return init();
+    }
+    
+    __declspec(dllexport) void update(float deltaTime) {
+        ::BMFG_Export_obj::updateFrame(deltaTime);
+    }
+    
+    __declspec(dllexport) void render() {
+        ::BMFG_Export_obj::render();
+    }
+    
+    __declspec(dllexport) void swapBuffers() {
+        ::BMFG_Export_obj::swapBuffers();
+    }
+    
+    __declspec(dllexport) void shutdownEngine() {
+        ::BMFG_Export_obj::engineShutdown();
+    }
+    
+    __declspec(dllexport) void release() {
+        ::BMFG_Export_obj::release();
+    }
+    
+    __declspec(dllexport) void loadState(int stateIndex) {
+        ::BMFG_Export_obj::loadState(stateIndex);
+    }
+    
+    __declspec(dllexport) int isRunning() {
+        return ::BMFG_Export_obj::engineIsRunning();
+    }
+    
+    __declspec(dllexport) int getWindowWidth() {
+        return ::BMFG_Export_obj::engineGetWindowWidth();
+    }
+    
+    __declspec(dllexport) int getWindowHeight() {
+        return ::BMFG_Export_obj::engineGetWindowHeight();
+    }
+    
+    __declspec(dllexport) void setWindowSize(int width, int height) {
+        ::BMFG_Export_obj::engineSetWindowSize(width, height);
+    }
+    
+    __declspec(dllexport) void* getWindowHandle() {
+        return ::BMFG_Export_obj::getWindowHandle();
+    }
+    
+    __declspec(dllexport) void setWindowPosition(int x, int y) {
+        ::BMFG_Export_obj::setWindowPosition(x, y);
+    }
+    
+    __declspec(dllexport) void setWindowSizeAndBorderless(int width, int height) {
+        ::BMFG_Export_obj::engineSetWindowSizeAndBorderless(width, height);
+    }
+}
+')
+
+class BMFG_Export {
+    
+    // Store app instance
+    private static var app:App = null;
+    private static var initialized:Bool = false;
+    
+    /**
+     * DLL Main - called when DLL mode is active
+     */
+    public static function main():Void {
+        trace("Haxe BMFG DLL loaded - ready for API calls");
+        trace("Available exports: EngineInit, EngineUpdate, EngineRender, etc.");
+    }
+    
+    // Custom log function that uses printf directly
+    private static function log(msg:String):Void {
+        untyped __cpp__("EngineTrace({0})", msg);
+    }
+    
+    /**
+     * Initialize the engine
+     * @return 1 on success, 0 on failure
+     */
+    @:keep
+    public static function init():Int {
+        if (initialized) {
+            log("Engine already initialized");
+            return 1;
+        }
+        
+        try {
+            log("Editor: Initializing engine...");
+            app = new App();
+            if (!app.init()) {
+                log("Editor: App.init() failed");
+                return 0;
+            }
+            
+            // Load the font baker state
+            app.addState(new FontBakerState(app));
+            log("Editor: FontBakerState loaded");
+            
+            initialized = true;
+            log("Editor: Engine initialized successfully");
+            return 1;
+        } catch (e:Dynamic) {
+            log("Editor: Init error: " + e);
+            return 0;
+        }
+    }
+    
+    /**
+     * Run one frame update
+     * @param deltaTime Time since last frame in seconds
+     */
+    @:keep
+    public static function updateFrame(deltaTime:Float):Void {
+        if (app == null || !initialized) {
+            log("Editor: Cannot update - engine not initialized");
+            return;
+        }
+        
+        try {
+            // Process events and update frame
+            app.processEvents();
+            app.updateFrame(deltaTime);
+        } catch (e:Dynamic) {
+            log("Editor: Update error: " + e);
+        }
+    }
+    
+    /**
+     * Render one frame
+     */
+    @:keep
+    public static function render():Void {
+        if (app == null || !initialized) {
+            log("Editor: Cannot render - engine not initialized");
+            return;
+        }
+        
+        try {
+            app.renderFrame();
+        } catch (e:Dynamic) {
+            log("Editor: Render error: " + e);
+            #if cpp
+            var stack = haxe.CallStack.exceptionStack();
+            log("Stack trace:");
+            for (item in stack) {
+                log("  " + haxe.CallStack.toString([item]));
+            }
+            #end
+        }
+    }
+    
+    /**
+     * Swap window buffers (present frame)
+     */
+    @:keep
+    public static function swapBuffers():Void {
+        if (app != null && initialized) {
+            app.swapBuffers();
+        }
+    }
+    
+    /**
+     * Shutdown the engine
+     */
+    @:keep
+    public static function engineShutdown():Void {
+        log("Editor: Shutting down engine...");
+        if (app != null) {
+            app.release();
+            app = null;
+            initialized = false;
+        }
+    }
+    
+    /**
+     * Release/cleanup engine resources
+     */
+    @:keep
+    public static function release():Void {
+        log("Editor: Releasing engine resources...");
+        if (app != null) {
+            app.release();
+            log("Editor: Engine resources released");
+            app = null;
+            initialized = false;
+        }
+    }
+    
+    /**
+     * Load a game state by ID
+     * @param stateId State identifier (0 = FontBakerState)
+     * @return 1 on success, 0 on failure
+     */
+    @:keep
+    public static function loadState(stateId:Int):Int {
+        if (app == null || !initialized) {
+            log("Editor: Engine not initialized");
+            return 0;
+        }
+        
+        try {
+            log("Editor: Loading state " + stateId);
+            switch (stateId) {
+                case 0: 
+                    app.addState(new FontBakerState(app));
+                    log("Editor: FontBakerState loaded");
+                default: 
+                    log("Editor: Unknown state ID: " + stateId);
+                    return 0;
+            }
+            return 1;
+        } catch (e:Dynamic) {
+            log("Editor: LoadState error: " + e);
+            return 0;
+        }
+    }
+    
+    /**
+     * Check if engine is running
+     * @return 1 if running, 0 if stopped
+     */
+    @:keep
+    public static function engineIsRunning():Int {
+        if (app != null && initialized) {
+            return app.active ? 1 : 0;
+        }
+        return 0;
+    }
+    
+    /**
+     * Get window width
+     */
+    @:keep
+    public static function engineGetWindowWidth():Int {
+        if (app != null && initialized) {
+            return app.WINDOW_WIDTH;
+        }
+        return 0;
+    }
+    
+    /**
+     * Get window height
+     */
+    @:keep
+    public static function engineGetWindowHeight():Int {
+        if (app != null && initialized) {
+            return app.WINDOW_HEIGHT;
+        }
+        return 0;
+    }
+    
+    /**
+     * Set window size
+     */
+    @:keep
+    public static function engineSetWindowSize(width:Int, height:Int):Void {
+        if (app != null && initialized) {
+            log("Editor: SetWindowSize not yet implemented");
+        }
+    }
+    
+    /**
+     * Get native window handle (HWND on Windows)
+     * Returns void* which can be cast to IntPtr in C#
+     */
+    @:keep
+    public static function getWindowHandle():cpp.RawPointer<cpp.Void> {
+        if (app != null && initialized && app.window != null) {
+            return untyped __cpp__("SDL_GetPointerProperty(SDL_GetWindowProperties({0}), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL)", app.window.ptr);
+        }
+        return null;
+    }
+    
+    /**
+     * Set window position (screen coordinates)
+     */
+    @:keep
+    public static function setWindowPosition(x:Int, y:Int):Void {
+        if (app != null && initialized && app.window != null) {
+            app.window.setPosition(x, y);
+        }
+    }
+    
+    /**
+     * Set window size and make it borderless for embedding
+     */
+    @:keep
+    public static function engineSetWindowSizeAndBorderless(width:Int, height:Int):Void {
+        if (app != null && initialized && app.window != null) {
+            //app.window.setSize(width, height);
+            //app.window.setBorderless(true);
+        }
+    }
+}
