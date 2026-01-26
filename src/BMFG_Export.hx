@@ -1,56 +1,23 @@
 package;
 
+import math.Vec2;
+
 /**
  * BMFG_Export class - DLL entry point and API for C# integration
  * Exposes the font baking engine as a DLL for external applications
  */
 
-// Declare C exports at header level (global scope)
-@:headerCode('
-// Callback typedef for C# to receive messages
-typedef void (*EngineCallback)(const char* message);
-
-extern "C" {
-    __declspec(dllexport) const char* HxcppInit();
-    __declspec(dllexport) void HxcppThreadAttach();
-    __declspec(dllexport) void HxcppThreadDetach();
-    __declspec(dllexport) void HxcppGarbageCollect(bool major);
-    __declspec(dllexport) void testConsole();
-    
-    __declspec(dllexport) void setCallback(EngineCallback callback);
-    __declspec(dllexport) int init();
-    __declspec(dllexport) int initWithCallback(EngineCallback callback);
-    __declspec(dllexport) void update(float deltaTime);
-    __declspec(dllexport) void render();
-    __declspec(dllexport) void swapBuffers();
-    __declspec(dllexport) void shutdownEngine();
-    __declspec(dllexport) void release();
-    __declspec(dllexport) void loadState(int stateIndex);
-    __declspec(dllexport) int isRunning();
-    __declspec(dllexport) int getWindowWidth();
-    __declspec(dllexport) int getWindowHeight();
-    __declspec(dllexport) void setWindowSize(int width, int height);
-    __declspec(dllexport) void* getWindowHandle();
-    __declspec(dllexport) void setWindowPosition(int x, int y);
-    __declspec(dllexport) void setWindowSizeAndBorderless(int width, int height);
-}
-')
-
-// Implement the C exports
+@:headerCode('#include "BMFG_Native.h"')
 @:cppFileCode('
-#include <hx/Thread.h>
-#include <windows.h>
-#include <io.h>
-#include <fcntl.h>
-#include <stdio.h>
+// Alias for cleaner code
+using Engine = ::BMFG_Export_obj;
 
-// Callback typedef for C# to receive messages
-typedef void (*EngineCallback)(const char* message);
+// Global state
+bool hxcpp_initialized = false;
+bool console_redirected = false;
 
-static bool hxcpp_initialized = false;
-static hx::AutoGCFreeZone *mainZone = NULL;
-static bool console_redirected = false;
-static EngineCallback g_callback = nullptr;
+// Callbacks
+EngineCallback g_callback = nullptr;
 
 void RedirectConsole() {
     if (console_redirected) return;
@@ -108,14 +75,6 @@ extern "C" {
         }
     }
     
-    // Test function to verify console output
-    __declspec(dllexport) void testConsole() {
-        RedirectConsole();
-        printf("TEST: Console is working!\\n");
-        fflush(stdout);
-        EngineTrace("TEST: EngineTrace is working!");
-    }
-    
     // Haxe runtime initialization
     __declspec(dllexport) const char* HxcppInit() {
         if (hxcpp_initialized) {
@@ -135,21 +94,7 @@ extern "C" {
         return err;  // Returns NULL on success, error message on failure
     }
     
-    __declspec(dllexport) void HxcppThreadAttach() {
-        hx::SetTopOfStack((int*)0, true);
-    }
-    
-    __declspec(dllexport) void HxcppThreadDetach() {
-        hx::SetTopOfStack((int*)0, false);
-    }
-    
-    __declspec(dllexport) void HxcppGarbageCollect(bool major) {
-        // Trigger garbage collection
-        extern void __hxcpp_collect(bool inMajor);
-        __hxcpp_collect(major);
-    }
-    
-    // Engine API - these use NativeAttach scope guards
+    // Engine API
     __declspec(dllexport) int init() {
         // Ensure runtime is initialized first
         if (!hxcpp_initialized) {
@@ -160,7 +105,7 @@ extern "C" {
         
         // Use NativeAttach to properly set up the thread
         hx::NativeAttach attach;
-        return ::BMFG_Export_obj::init();
+        return Engine::init();
     }
     
     __declspec(dllexport) int initWithCallback(EngineCallback callback) {
@@ -175,59 +120,59 @@ extern "C" {
     }
     
     __declspec(dllexport) void updateFrame(float deltaTime) {
-        ::BMFG_Export_obj::updateFrame(deltaTime);
+        Engine::updateFrame(deltaTime);
     }
     
     __declspec(dllexport) void render() {
-        ::BMFG_Export_obj::render();
+        Engine::render();
     }
     
     __declspec(dllexport) void swapBuffers() {
-        ::BMFG_Export_obj::swapBuffers();
+        Engine::swapBuffers();
     }
     
     __declspec(dllexport) void shutdownEngine() {
-        ::BMFG_Export_obj::engineShutdown();
+        Engine::engineShutdown();
     }
     
     __declspec(dllexport) void release() {
-        ::BMFG_Export_obj::release();
+        Engine::release();
     }
     
     __declspec(dllexport) void loadState(int stateIndex) {
-        ::BMFG_Export_obj::loadState(stateIndex);
+        Engine::loadState(stateIndex);
     }
     
     __declspec(dllexport) int isRunning() {
-        return ::BMFG_Export_obj::engineIsRunning();
+        return Engine::engineIsRunning();
     }
     
     __declspec(dllexport) int getWindowWidth() {
-        return ::BMFG_Export_obj::engineGetWindowWidth();
+        return Engine::engineGetWindowWidth();
     }
     
     __declspec(dllexport) int getWindowHeight() {
-        return ::BMFG_Export_obj::engineGetWindowHeight();
+        return Engine::engineGetWindowHeight();
     }
     
     __declspec(dllexport) void setWindowSize(int width, int height) {
-        ::BMFG_Export_obj::engineSetWindowSize(width, height);
+        Engine::engineSetWindowSize(width, height);
     }
     
     __declspec(dllexport) void* getWindowHandle() {
-        return ::BMFG_Export_obj::getWindowHandle();
+        return Engine::getWindowHandle();
     }
     
     __declspec(dllexport) void setWindowPosition(int x, int y) {
-        ::BMFG_Export_obj::setWindowPosition(x, y);
+        Engine::setWindowPosition(x, y);
     }
     
     __declspec(dllexport) void setWindowSizeAndBorderless(int width, int height) {
-        ::BMFG_Export_obj::engineSetWindowSizeAndBorderless(width, height);
+        Engine::engineSetWindowSizeAndBorderless(width, height);
     }
-
+    
     __declspec(dllexport) void onMouseClick(int x, int y) {
-        ::BMFG_Export_obj::onMouseClick(x, y);
+        Engine::onMouseClick(x, y);
     }
 }
 ')
@@ -276,6 +221,7 @@ class BMFG_Export {
             
             initialized = true;
             log("Editor: Engine initialized successfully");
+
             return 1;
         } catch (e:Dynamic) {
             log("Editor: Init error: " + e);
@@ -433,7 +379,7 @@ class BMFG_Export {
     @:keep
     public static function engineSetWindowSize(width:Int, height:Int):Void {
         if (app != null && initialized) {
-            log("Editor: SetWindowSize not yet implemented");
+            app.window.size = new Vec2(width, height);
         }
     }
     
@@ -469,11 +415,19 @@ class BMFG_Export {
             //app.window.setBorderless(true);
         }
     }
-
+    
+    /**
+     * Handle mouse click event from C# host
+     * @param x Mouse X coordinate
+     * @param y Mouse Y coordinate
+     */
     @:keep
     public static function onMouseClick(x:Int, y:Int):Void {
-        if (app != null && initialized && app.window != null) {
-            trace("Mouse click at: " + x + ", " + y);
+        if (app != null && initialized) {
+            // Forward mouse click to app's input handling
+            log('Mouse click at: $x, $y');
+            // You can implement custom mouse handling here
+            // For example: app.handleMouseClick(x, y);
         }
     }
 }
