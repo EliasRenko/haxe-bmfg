@@ -9,60 +9,34 @@ import math.Vec2;
 
 @:headerCode('#include "BMFG_Native.h"')
 @:cppFileCode('
+#include <SDL3/SDL_log.h>
+
 // Alias for cleaner code
 using Engine = ::BMFG_Export_obj;
 
 // Global state
 bool hxcpp_initialized = false;
-bool console_redirected = false;
 
 // Callbacks
 EngineCallback g_callback = nullptr;
 
-void RedirectConsole() {
-    if (console_redirected) return;
-    
-    // Allocate console
-    if (!AllocConsole()) {
-        // Console might already exist, try to attach
-        if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
-            return;
-        }
-    }
-    
-    // Redirect stdout
-    FILE* fpStdout = nullptr;
-    freopen_s(&fpStdout, "CONOUT$", "w", stdout);
-    
-    // Redirect stderr  
-    FILE* fpStderr = nullptr;
-    freopen_s(&fpStderr, "CONOUT$", "w", stderr);
-    
-    // Redirect stdin
-    FILE* fpStdin = nullptr;
-    freopen_s(&fpStdin, "CONIN$", "r", stdin);
-    
-    // Disable buffering
-    setvbuf(stdout, NULL, _IONBF, 0);
-    setvbuf(stderr, NULL, _IONBF, 0);
-    
-    console_redirected = true;
-    
-    printf("========================================\\n");
-    printf("DLL Console Initialized\\n");
-    printf("========================================\\n");
-    fflush(stdout);
-}
-
-// Custom trace function that writes directly to console and callback
-void EngineTrace(const char* msg) {
-    if (!console_redirected) RedirectConsole();
-    printf("[HAXE] %s\\n", msg);
-    fflush(stdout);
-    
-    // Also send to C# callback if registered
+// SDL log output function that forwards to C# callback
+void SDLCALL CustomLogOutput(void* userdata, int category, SDL_LogPriority priority, const char* message) {
     if (g_callback != nullptr) {
-        g_callback(msg);
+        // Format: [PRIORITY] message
+        const char* priorityStr = "INFO";
+        switch (priority) {
+            case SDL_LOG_PRIORITY_VERBOSE: priorityStr = "VERBOSE"; break;
+            case SDL_LOG_PRIORITY_DEBUG: priorityStr = "DEBUG"; break;
+            case SDL_LOG_PRIORITY_INFO: priorityStr = "INFO"; break;
+            case SDL_LOG_PRIORITY_WARN: priorityStr = "WARN"; break;
+            case SDL_LOG_PRIORITY_ERROR: priorityStr = "ERROR"; break;
+            case SDL_LOG_PRIORITY_CRITICAL: priorityStr = "CRITICAL"; break;
+        }
+        
+        char buffer[1024];
+        snprintf(buffer, sizeof(buffer), "[%s] %s", priorityStr, message);
+        g_callback(buffer);
     }
 }
 
@@ -71,7 +45,8 @@ extern "C" {
     __declspec(dllexport) void setCallback(EngineCallback callback) {
         g_callback = callback;
         if (callback != nullptr) {
-            EngineTrace("Callback registered successfully");
+            // Hook SDL log output to forward to C# callback
+            SDL_SetLogOutputFunction(CustomLogOutput, nullptr);
         }
     }
     
@@ -81,15 +56,9 @@ extern "C" {
             return NULL;  // Already initialized
         }
         
-        // Redirect console first
-        RedirectConsole();
-        
         const char* err = hx::Init();
         if (err == NULL) {
             hxcpp_initialized = true;
-            printf("Haxe runtime initialized\\n");
-        } else {
-            printf("Haxe init error: %s\\n", err);
         }
         return err;  // Returns NULL on success, error message on failure
     }
@@ -110,10 +79,7 @@ extern "C" {
     
     __declspec(dllexport) int initWithCallback(EngineCallback callback) {
         // Set callback first
-        g_callback = callback;
-        if (callback != nullptr) {
-            EngineTrace("Callback registered");
-        }
+        setCallback(callback);
         
         // Then initialize
         return init();
@@ -191,9 +157,9 @@ class BMFG_Export {
         trace("Available exports: EngineInit, EngineUpdate, EngineRender, etc.");
     }
     
-    // Custom log function that uses printf directly
+    // Custom log function that uses SDL logging (forwarded to C# via CustomLogOutput)
     private static function log(msg:String):Void {
-        untyped __cpp__("EngineTrace({0})", msg);
+        untyped __cpp__("SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, \"%s\", {0})", msg);
     }
     
     /**
@@ -217,10 +183,10 @@ class BMFG_Export {
             
             // Load the font baker state
             app.addState(new FontBakerState(app));
-            log("Editor: FontBakerState loaded");
+            app.log.info(1, "FontBakerState loaded");
             
             initialized = true;
-            log("Editor: Engine initialized successfully");
+            log("Engine initialized successfully");
 
             return 1;
         } catch (e:Dynamic) {
