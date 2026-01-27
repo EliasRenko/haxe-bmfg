@@ -34,6 +34,13 @@ class FontBakerState extends State {
         // Set up orthographic camera for 2D text rendering
         camera.ortho = true;
         
+        // Log camera and window info for debugging
+        app.log.info(0, "=== Camera Setup ===");
+        app.log.info(0, "Window size: " + app.WINDOW_WIDTH + "x" + app.WINDOW_HEIGHT);
+        app.log.info(0, "Camera ortho: " + camera.ortho);
+        app.log.info(0, "Camera zoom: " + camera.zoom);
+        app.log.info(0, "Camera position: (" + camera.x + ", " + camera.y + ", " + camera.z + ")");
+        
         trace("");
         trace("Press ESC to exit");
         trace("Press P to increase font size");
@@ -108,9 +115,7 @@ class FontBakerState extends State {
                 96                          // Number of characters (ASCII printable)
             );
             
-            app.log.info(0, separator);
             app.log.info(0, "Font baking complete!");
-            app.log.info(0, separator);
         } catch (e:Dynamic) {
             app.log.error(0, 'Font baking failed: $e');
             throw e;
@@ -131,6 +136,13 @@ class FontBakerState extends State {
             app.log.info(0, 'Font JSON loaded successfully, length: ${jsonText.length}');
             var fontData = FontLoader.load(jsonText);
             app.log.info(0, 'Font data parsed, characters: ${Lambda.count(fontData.chars)}');
+            
+            // Log font metrics for debugging
+            if (fontData.chars.exists(65)) { // 'A' character
+                var charA = fontData.chars.get(65);
+                app.log.info(0, 'Sample char "A": width=${charA.width}, height=${charA.height}, advance=${charA.xadvance}');
+            }
+            app.log.info(0, 'Font metrics - base: ${fontData.base}, lineHeight: ${fontData.lineHeight}');
             
             // Load font texture at runtime (not from cache)
             app.resources.loadTexture('fonts/$outputName.tga', false).then((fontTextureData) -> {
@@ -162,8 +174,13 @@ class FontBakerState extends State {
                 var centerX = app.window.size.x / 2 - 150;
                 var centerY = app.window.size.y / 2;
                 
+                // Round positions to whole pixels for pixel-perfect rendering
+                centerX = Math.round(centerX);
+                centerY = Math.round(centerY);
+                
                 app.log.info(0, "Window size: " + app.window.size.x + "x" + app.window.size.y);
                 app.log.info(0, "Text position: (" + centerX + ", " + (centerY - 100) + ")");
+                app.log.info(0, "Camera zoom: " + camera.zoom);
                 
                 displayText = new Text(bitmapFont, 
                     "Hello, World!\nBaked Font Test\nNokia FC22 @ " + Std.int(currentFontSize) + "px\n\nABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n0123456789\n!@#$%^&*()_+-=[]{}|;':,\",./<>?",

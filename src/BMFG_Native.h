@@ -41,6 +41,7 @@ extern "C" {
     // Mouse input handling
     __declspec(dllexport) void onMouseClick(int x, int y);
     
+    
     // Font baking
     __declspec(dllexport) void loadAndBakeFont(const char* fontPath, float fontSize);
 }
