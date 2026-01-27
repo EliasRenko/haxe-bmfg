@@ -140,6 +140,10 @@ extern "C" {
     __declspec(dllexport) void onMouseClick(int x, int y) {
         Engine::onMouseClick(x, y);
     }
+    
+    __declspec(dllexport) void loadAndBakeFont(const char* fontPath, float fontSize) {
+        Engine::loadAndBakeFont(fontPath, fontSize);
+    }
 }
 ')
 
@@ -394,6 +398,34 @@ class BMFG_Export {
             log('Mouse click at: $x, $y');
             // You can implement custom mouse handling here
             // For example: app.handleMouseClick(x, y);
+        }
+    }
+    
+    /**
+     * Load and bake a font from a TTF file
+     * @param fontPath Path to the TTF font file
+     * @param fontSize Font size in pixels
+     */
+    @:keep
+    public static function loadAndBakeFont(fontPath:String, fontSize:Float):Void {
+        if (app == null || !initialized) {
+            log("Editor: Cannot load font - engine not initialized");
+            return;
+        }
+        
+        try {
+            log('Loading and baking font: $fontPath at ${fontSize}px');
+            
+            // Get the FontBakerState
+            var state = app.currentState;
+            if (state != null && Std.isOfType(state, FontBakerState)) {
+                var fontState:FontBakerState = cast state;
+                fontState.loadAndBakeFont(fontPath, fontSize);
+            } else {
+                log("Editor: Current state is not FontBakerState");
+            }
+        } catch (e:Dynamic) {
+            log("Editor: Load font error: " + e);
         }
     }
 }

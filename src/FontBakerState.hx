@@ -21,6 +21,8 @@ class FontBakerState extends State {
     private var bitmapFont:BitmapFont;
     private var displayText:Text;
     private var currentFontSize:Float = 20.0;
+    private var fontPath:String;
+    private var outputName:String;
     
     public function new(app:App) {
         super("FontBakerState", app);
@@ -32,12 +34,6 @@ class FontBakerState extends State {
         // Set up orthographic camera for 2D text rendering
         camera.ortho = true;
         
-        // Bake font with initial size
-        bakeFontAtSize(currentFontSize);
-        
-        // Now load and display the baked font immediately
-        setupBakedFont(app.renderer);
-        
         trace("");
         trace("Press ESC to exit");
         trace("Press P to increase font size");
@@ -45,80 +41,129 @@ class FontBakerState extends State {
     }
     
     /**
+     * Public function to bake and display a font
+     * Called from C# via BMFG_Export
+     */
+    public function loadAndBakeFont(fontPath:String, fontSize:Float):Void {
+        app.log.info(0, 'loadAndBakeFont called with path: "$fontPath", size: $fontSize');
+        
+        try {
+            // Update current settings
+            this.fontPath = fontPath;
+            this.currentFontSize = fontSize;
+            
+            // Generate output name from input font path (remove extension and path)
+            // Handle both forward and back slashes
+            var lastSlash = Std.int(Math.max(fontPath.lastIndexOf("/"), fontPath.lastIndexOf("\\")));
+            var fileName = fontPath.substring(lastSlash + 1);
+            app.log.info(0, 'Extracted fileName: "$fileName"');
+            
+            if (fileName.indexOf(".") > 0) {
+                fileName = fileName.substring(0, fileName.lastIndexOf("."));
+            }
+            this.outputName = fileName + "_baked";
+            app.log.info(0, 'Generated outputName: "$outputName"');
+            
+            // Remove old font entity if exists
+            if (entities.length > 0) {
+                app.log.info(0, 'Removing ${entities.length} old entities');
+                var entity = entities[0];
+                removeEntity(entity);
+            }
+            
+            // Bake the font
+            app.log.info(0, 'Starting font baking...');
+            bakeFontAtSize(fontPath, fontSize, outputName);
+            
+            // Setup and display
+            app.log.info(0, 'Starting font setup...');
+            setupBakedFont(app.renderer, outputName);
+        } catch (e:Dynamic) {
+            app.log.error(0, 'Error in loadAndBakeFont: $e');
+        }
+    }
+    
+    /**
      * Bake font at specified size
      */
-    private function bakeFontAtSize(fontSize:Float):Void {
+    private function bakeFontAtSize(fontPath:String, fontSize:Float, outputName:String):Void {
         var separator = "";
         for (i in 0...60) separator += "=";
         
-        trace(separator);
-        trace("FontBakerState: Baking font at " + fontSize + "px");
-        trace(separator);
+        app.log.info(0, separator);
+        app.log.info(0, 'Baking font at ${fontSize}px');
+        app.log.info(0, '  Input: "$fontPath"');
+        app.log.info(0, '  Output: "$outputName"');
+        app.log.info(0, separator);
         
-        // Bake Nokia FC22 font for pixel art rendering
-        // Critical settings for pixel art:
-        // - fontSize MUST match font's designed size (16px for Nokia FC22)
-        // - No oversampling (1x1) - prevents anti-aliasing blur
-        // - Binary threshold - converts to pure black/white
-        // - GL_NEAREST filtering (already set in Renderer)
-        // This will generate:
-        //   - res/fonts/nokiafc22_baked.tga (atlas texture)
-        //   - res/fonts/nokiafc22_baked.json (character metadata)
-        FontBaker.bakeFont(
-            "res/fonts/nokiafc22.ttf",  // Input TTF file
-            "nokiafc22_baked",          // Output name (without extension)
-            fontSize,                   // Font size in pixels
-            512,                        // Atlas width
-            512,                        // Atlas height
-            32,                         // First character (space)
-            96                          // Number of characters (ASCII printable)
-        );
-        
-        trace(separator);
-        trace("FontBakerState: Font baking complete!");
-        trace(separator);
+        try {
+            // Bake font
+            FontBaker.bakeFont(
+                fontPath,  // Input TTF file
+                outputName,          // Output name (without extension)
+                fontSize,                   // Font size in pixels
+                512,                        // Atlas width
+                512,                        // Atlas height
+                32,                         // First character (space)
+                96                          // Number of characters (ASCII printable)
+            );
+            
+            app.log.info(0, separator);
+            app.log.info(0, "Font baking complete!");
+            app.log.info(0, separator);
+        } catch (e:Dynamic) {
+            app.log.error(0, 'Font baking failed: $e');
+            throw e;
+        }
     }
     
     /**
      * Setup and display the baked font
      */
-    private function setupBakedFont(renderer:Renderer):Void {
-        trace("");
-        trace("FontBakerState: Loading baked font for display...");
+    private function setupBakedFont(renderer:Renderer, outputName:String):Void {
+        app.log.info(0, "");
+        app.log.info(0, "Loading baked font for display...");
+        app.log.info(0, '  JSON path: "fonts/$outputName.json"');
+        app.log.info(0, '  Texture path: "fonts/$outputName.tga"');
         
         // Load font JSON at runtime (not from cache)
-        app.resources.loadText("fonts/nokiafc22_baked.json", false).then((jsonText) -> {
+        app.resources.loadText('fonts/$outputName.json', false).then((jsonText) -> {
+            app.log.info(0, 'Font JSON loaded successfully, length: ${jsonText.length}');
             var fontData = FontLoader.load(jsonText);
+            app.log.info(0, 'Font data parsed, characters: ${Lambda.count(fontData.chars)}');
             
             // Load font texture at runtime (not from cache)
-            app.resources.loadTexture("fonts/nokiafc22_baked.tga", false).then((fontTextureData) -> {
+            app.resources.loadTexture('fonts/$outputName.tga', false).then((fontTextureData) -> {
+                app.log.info(0, 'Font texture loaded: ${fontTextureData.width}x${fontTextureData.height}');
+                
                 var fontTexture = renderer.uploadTexture(fontTextureData);
+                app.log.info(0, 'Font texture uploaded, ID: ${fontTexture.id}');
                 
                 // Create text shader
-                trace("FontBakerState: Loading text shaders...");
+                app.log.info(0, "Loading text shaders...");
                 var textVertShader = app.resources.getText("shaders/text.vert");
-                trace("FontBakerState: text.vert loaded: " + (textVertShader != null) + " length=" + (textVertShader != null ? textVertShader.length : 0));
+                app.log.info(0, 'text.vert loaded: ${textVertShader != null}, length=${textVertShader != null ? textVertShader.length : 0}');
                 var textFragShader = app.resources.getText("shaders/text.frag");
-                trace("FontBakerState: text.frag loaded: " + (textFragShader != null) + " length=" + (textFragShader != null ? textFragShader.length : 0));
+                app.log.info(0, 'text.frag loaded: ${textFragShader != null}, length=${textFragShader != null ? textFragShader.length : 0}');
                 var textProgramInfo = renderer.createProgramInfo("text", textVertShader, textFragShader);
                 
-                trace("FontBakerState: DEBUG - Shader loaded: " + (textProgramInfo != null));
-                trace("FontBakerState: DEBUG - Font texture ID: " + fontTexture.id);
-                trace("FontBakerState: DEBUG - Font texture size: " + fontTextureData.width + "x" + fontTextureData.height);
-                trace("FontBakerState: DEBUG - Font data characters: " + Lambda.count(fontData.chars));
+                app.log.info(0, "Shader program created: " + (textProgramInfo != null));
+                app.log.info(0, "Font texture ID: " + fontTexture.id);
+                app.log.info(0, "Font texture size: " + fontTextureData.width + "x" + fontTextureData.height);
                 
                 // Create bitmap font
+                app.log.info(0, "Creating BitmapFont...");
                 bitmapFont = new BitmapFont(textProgramInfo, fontTexture, fontData);
                 bitmapFont.init(renderer);
                 
-                trace("FontBakerState: DEBUG - BitmapFont created, visible=" + bitmapFont.visible);
+                app.log.info(0, "BitmapFont created, visible=" + bitmapFont.visible);
                 
                 // Create text to display
                 var centerX = app.window.size.x / 2 - 150;
                 var centerY = app.window.size.y / 2;
                 
-                trace("FontBakerState: DEBUG - Window size: " + app.window.size.x + "x" + app.window.size.y);
-                trace("FontBakerState: DEBUG - Text position: (" + centerX + ", " + (centerY - 100) + ")");
+                app.log.info(0, "Window size: " + app.window.size.x + "x" + app.window.size.y);
+                app.log.info(0, "Text position: (" + centerX + ", " + (centerY - 100) + ")");
                 
                 displayText = new Text(bitmapFont, 
                     "Hello, World!\nBaked Font Test\nNokia FC22 @ " + Std.int(currentFontSize) + "px\n\nABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n0123456789\n!@#$%^&*()_+-=[]{}|;':,\",./<>?",
@@ -126,32 +171,32 @@ class FontBakerState extends State {
                     centerY - 100
                 );
                 
-                trace("FontBakerState: DEBUG - Text created, visible=" + displayText.visible);
-                trace("FontBakerState: DEBUG - Text size: " + displayText.width + "x" + displayText.height);
-                trace("FontBakerState: DEBUG - Tiles before buffer update: " + bitmapFont.getTileCount());
-                trace("FontBakerState: DEBUG - Atlas regions defined: " + Lambda.count(bitmapFont.atlasRegions));
+                app.log.info(0, "Text created, visible=" + displayText.visible);
+                app.log.info(0, "Text size: " + displayText.width + "x" + displayText.height);
+                app.log.info(0, "Tiles before buffer update: " + bitmapFont.getTileCount());
+                app.log.info(0, "Atlas regions defined: " + Lambda.count(bitmapFont.atlasRegions));
                 
                 // Update buffers after adding text tiles
                 bitmapFont.needsBufferUpdate = true;
                 bitmapFont.updateBuffers(renderer);
                 
-                trace("FontBakerState: DEBUG - Buffers updated");
+                app.log.info(0, "Buffers updated");
                 
                 // Add font to scene using DisplayEntity (Text uses the font's tile batch)
                 var fontEntity = new DisplayEntity(bitmapFont, "baked_font_display");
                 addEntity(fontEntity);
                 
-                trace("FontBakerState: DEBUG - Entity created, active=" + fontEntity.active + ", visible=" + fontEntity.visible);
-                trace("FontBakerState: DEBUG - DisplayObject visible=" + fontEntity.displayObject.visible);
-                trace("FontBakerState: DEBUG - Total entities in state: " + entities.length);
+                app.log.info(0, "Entity created, active=" + fontEntity.active + ", visible=" + fontEntity.visible);
+                app.log.info(0, "DisplayObject visible=" + fontEntity.displayObject.visible);
+                app.log.info(0, "Total entities in state: " + entities.length);
                 
-                trace("FontBakerState: Baked font displayed successfully!");
-                trace("FontBakerState: BitmapFont has " + bitmapFont.getTileCount() + " tiles");
+                app.log.info(0, "Baked font displayed successfully!");
+                app.log.info(0, "BitmapFont has " + bitmapFont.getTileCount() + " tiles");
             }).onError((error) -> {
-                trace("FontBakerState: Failed to load font texture - " + error);
+                app.log.error(0, "Failed to load font texture - " + error);
             });
         }).onError((error) -> {
-            trace("FontBakerState: Failed to load font data - " + error);
+            app.log.error(0, "Failed to load font data - " + error);
         });
     }
     
@@ -194,10 +239,10 @@ class FontBakerState extends State {
         }
         
         // Rebake font with new size
-        bakeFontAtSize(currentFontSize);
+        bakeFontAtSize(fontPath, currentFontSize, outputName);
         
         // Reload and display
-        setupBakedFont(app.renderer);
+        setupBakedFont(app.renderer, outputName);
     }
     
     private var renderFrameCount:Int = 0;

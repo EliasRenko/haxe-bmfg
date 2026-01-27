@@ -21,6 +21,7 @@ extern "C" {
 
     __declspec(dllexport) void setCallback(EngineCallback callback);
     
+    // Engine lifecycle functions
     __declspec(dllexport) int init();
     __declspec(dllexport) int initWithCallback(EngineCallback callback);
     __declspec(dllexport) void updateFrame(float deltaTime);
@@ -39,6 +40,9 @@ extern "C" {
 
     // Mouse input handling
     __declspec(dllexport) void onMouseClick(int x, int y);
+    
+    // Font baking
+    __declspec(dllexport) void loadAndBakeFont(const char* fontPath, float fontSize);
 }
 
 #endif // BMFG_NATIVE_H
