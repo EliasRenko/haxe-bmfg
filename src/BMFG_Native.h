@@ -42,8 +42,10 @@ extern "C" {
     __declspec(dllexport) void onMouseClick(int x, int y);
     
     
-    // Font baking
-    __declspec(dllexport) void loadAndBakeFont(const char* fontPath, float fontSize);
+    // Font operations
+    __declspec(dllexport) void importFont(const char* fontPath, float fontSize);
+    __declspec(dllexport) void exportFont(const char* fontPath, float fontSize);
+    __declspec(dllexport) void loadFont(const char* outputName);
 }
 
 #endif // BMFG_NATIVE_H

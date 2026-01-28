@@ -141,8 +141,16 @@ extern "C" {
         Engine::onMouseClick(x, y);
     }
     
-    __declspec(dllexport) void loadAndBakeFont(const char* fontPath, float fontSize) {
-        Engine::loadAndBakeFont(fontPath, fontSize);
+    __declspec(dllexport) void importFont(const char* fontPath, float fontSize) {
+        Engine::importFont(fontPath, fontSize);
+    }
+    
+    __declspec(dllexport) void exportFont(const char* fontPath, float fontSize) {
+        Engine::exportFont(fontPath, fontSize);
+    }
+    
+    __declspec(dllexport) void loadFont(const char* outputName) {
+        Engine::loadFont(outputName);
     }
 }
 ')
@@ -402,25 +410,80 @@ class BMFG_Export {
     }
     
     /**
-     * Load and bake a font from a TTF file
+     * Import a TTF font - loads, bakes to RAM texture, and displays without exporting to disk
      * @param fontPath Path to the TTF font file
      * @param fontSize Font size in pixels
      */
     @:keep
-    public static function loadAndBakeFont(fontPath:String, fontSize:Float):Void {
+    public static function importFont(fontPath:String, fontSize:Float):Void {
+        if (app == null || !initialized) {
+            log("Editor: Cannot import font - engine not initialized");
+            return;
+        }
+        
+        try {
+            log('Importing font: $fontPath at ${fontSize}px (RAM only, no export)');
+            
+            // Get the FontBakerState
+            var state = app.currentState;
+            if (state != null && Std.isOfType(state, FontBakerState)) {
+                var fontState:FontBakerState = cast state;
+                fontState.importFont(fontPath, fontSize);
+            } else {
+                log("Editor: Current state is not FontBakerState");
+            }
+        } catch (e:Dynamic) {
+            log("Editor: Import font error: " + e);
+        }
+    }
+    
+    /**
+     * Export a font - bakes TTF to texture atlas and saves JSON + TGA files to disk
+     * @param fontPath Path to the TTF font file
+     * @param fontSize Font size in pixels
+     */
+    @:keep
+    public static function exportFont(fontPath:String, fontSize:Float):Void {
+        if (app == null || !initialized) {
+            log("Editor: Cannot export font - engine not initialized");
+            return;
+        }
+        
+        try {
+            log('Exporting font: $fontPath at ${fontSize}px');
+            
+            // Get the FontBakerState
+            var state = app.currentState;
+            if (state != null && Std.isOfType(state, FontBakerState)) {
+                var fontState:FontBakerState = cast state;
+                fontState.exportFont(fontPath, fontSize);
+            } else {
+                log("Editor: Current state is not FontBakerState");
+            }
+        } catch (e:Dynamic) {
+            log("Editor: Export font error: " + e);
+        }
+    }
+    
+    /**
+     * Load a previously exported font and display it
+     * @param outputName Output name (without extension) of the baked font files
+     */
+    @:keep
+    public static function loadFont(outputName:String):Void {
         if (app == null || !initialized) {
             log("Editor: Cannot load font - engine not initialized");
             return;
         }
         
         try {
-            log('Loading and baking font: $fontPath at ${fontSize}px');
+            log('Loading font: $outputName');
             
             // Get the FontBakerState
             var state = app.currentState;
             if (state != null && Std.isOfType(state, FontBakerState)) {
                 var fontState:FontBakerState = cast state;
-                fontState.loadAndBakeFont(fontPath, fontSize);
+                fontState.loadFont(outputName);
             } else {
                 log("Editor: Current state is not FontBakerState");
             }
