@@ -41,9 +41,9 @@ extern "C" {
     // Mouse input handling
     __declspec(dllexport) void onMouseClick(int x, int y);
     
-    
     // Font operations
     __declspec(dllexport) void importFont(const char* fontPath, float fontSize);
+    __declspec(dllexport) void rebakeFont(float fontSize, int atlasWidth, int atlasHeight, int firstChar, int numChars);
     __declspec(dllexport) void exportFont(const char* outputPath);
     __declspec(dllexport) void loadFont(const char* outputName);
 }

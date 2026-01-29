@@ -145,6 +145,10 @@ extern "C" {
         Engine::importFont(fontPath, fontSize);
     }
     
+    __declspec(dllexport) void rebakeFont(float fontSize, int atlasWidth, int atlasHeight, int firstChar, int numChars) {
+        Engine::rebakeFont(fontSize, atlasWidth, atlasHeight, firstChar, numChars);
+    }
+    
     __declspec(dllexport) void exportFont(const char* outputPath) {
         Engine::exportFont(outputPath);
     }
@@ -462,6 +466,37 @@ class BMFG_Export {
             }
         } catch (e:Dynamic) {
             log("Editor: Export font error: " + e);
+        }
+    }
+    
+    /**
+     * Rebake the currently loaded font with new settings
+     * @param fontSize Font size in pixels
+     * @param atlasWidth Atlas texture width
+     * @param atlasHeight Atlas texture height
+     * @param firstChar First character to bake
+     * @param numChars Number of characters to bake
+     */
+    @:keep
+    public static function rebakeFont(fontSize:Float, atlasWidth:Int, atlasHeight:Int, firstChar:Int, numChars:Int):Void {
+        if (app == null || !initialized) {
+            log("Editor: Cannot rebake font - engine not initialized");
+            return;
+        }
+        
+        try {
+            log('Rebaking font: size=$fontSize, atlas=${atlasWidth}x${atlasHeight}, chars=$firstChar-${firstChar + numChars - 1}');
+            
+            // Get the FontBakerState
+            var state = app.currentState;
+            if (state != null && Std.isOfType(state, FontBakerState)) {
+                var fontState:FontBakerState = cast state;
+                fontState.rebakeFont(fontSize, atlasWidth, atlasHeight, firstChar, numChars);
+            } else {
+                log("Editor: Current state is not FontBakerState");
+            }
+        } catch (e:Dynamic) {
+            log("Editor: Rebake font error: " + e);
         }
     }
     

@@ -447,7 +447,9 @@ class FontBakerState extends State {
             currentFontSize += 1.0;
             if (currentFontSize > 64.0) currentFontSize = 64.0; // Max size
             trace("FontBakerState: Increasing font size to " + currentFontSize + "px");
-            rebakeFont();
+            if (cachedFontBytes != null) {
+                rebakeFont(currentFontSize);
+            }
         }
         
         // Check for O key to decrease font size (scancode 18 = 'O')
@@ -455,16 +457,64 @@ class FontBakerState extends State {
             currentFontSize -= 1.0;
             if (currentFontSize < 4.0) currentFontSize = 4.0; // Min size
             trace("FontBakerState: Decreasing font size to " + currentFontSize + "px");
-            rebakeFont();
+            if (cachedFontBytes != null) {
+                rebakeFont(currentFontSize);
+            }
         }
     }
     
     /**
-     * Rebake font and reload it
+     * Rebake the currently loaded font with new settings
+     * Must call importFont() first to have a font path loaded
+     * @param fontSize Font size in pixels
+     * @param atlasWidth Atlas texture width (default 512)
+     * @param atlasHeight Atlas texture height (default 512)
+     * @param firstChar First character to bake (default 32 = space)
+     * @param numChars Number of characters to bake (default 96 = ASCII printable)
      */
-    private function rebakeFont():Void {
-        // Rebake font with new size (will update existing entity)
-        bakeFontToRAM(fontPath, currentFontSize);
+    public function rebakeFont(fontSize:Float, atlasWidth:Int = 512, atlasHeight:Int = 512, 
+                               firstChar:Int = 32, numChars:Int = 96):Void {
+        app.log.info(0, 'rebakeFont called with size: $fontSize, atlas: ${atlasWidth}x${atlasHeight}, range: $firstChar-${firstChar + numChars - 1}');
+        
+        try {
+            // Validate that we have a font path and bytes
+            if (cachedFontBytes == null || cachedFontName == null) {
+                throw "No font loaded. Call importFont() first!";
+            }
+            
+            // Update current size
+            this.currentFontSize = fontSize;
+            
+            var separator = "";
+            for (i in 0...60) separator += "=";
+            
+            app.log.info(0, separator);
+            app.log.info(0, 'Rebaking font: $cachedFontName at ${fontSize}px');
+            app.log.info(0, '  Atlas: ${atlasWidth}x${atlasHeight}');
+            app.log.info(0, '  Character range: $firstChar-${firstChar + numChars - 1} ($numChars chars)');
+            app.log.info(0, separator);
+            
+            // Bake font with new settings
+            var bakedData = FontBaker.bakeFontFromBytes(
+                cachedFontBytes,
+                cachedFontName,
+                fontSize,
+                atlasWidth,
+                atlasHeight,
+                firstChar,
+                numChars
+            );
+            
+            // Store for later export
+            currentBakedData = bakedData;
+            
+            app.log.info(0, "Font rebaked successfully, updating display...");
+            setupBakedFontFromData(app.renderer, bakedData);
+            
+        } catch (e:Dynamic) {
+            app.log.error(0, 'Font rebaking failed: $e');
+            throw e;
+        }
     }
     
     private var renderFrameCount:Int = 0;
