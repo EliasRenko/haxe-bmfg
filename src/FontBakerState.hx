@@ -25,6 +25,9 @@ class FontBakerState extends State {
     private var currentFontSize:Float = 20.0;
     private var fontPath:String;
     private var outputName:String;
+    private var cachedFontBytes:haxe.io.Bytes;
+    private var cachedFontName:String;
+    private var currentBakedData:BakedFontData;
     
     public function new(app:App) {
         super("FontBakerState", app);
@@ -73,32 +76,40 @@ class FontBakerState extends State {
     }
     
     /**
-     * Export font - Bake TTF to texture atlas and save JSON + TGA files to disk
-     * @param fontPath Path to the TTF font file
-     * @param fontSize Font size in pixels
+     * Export the currently imported/baked font to disk
+     * Must call importFont() first to have font data to export
+     * @param outputPath Full path where to save (e.g., "C:\\fonts\\arial_20" without extension)
      */
-    public function exportFont(fontPath:String, fontSize:Float):Void {
-        app.log.info(0, 'exportFont called with path: "$fontPath", size: $fontSize');
+    public function exportFont(outputPath:String):Void {
+        app.log.info(0, 'exportFont called with path: "$outputPath"');
         
         try {
-            // Update current settings
-            this.fontPath = fontPath;
-            this.currentFontSize = fontSize;
+            // Validate that we have baked data to export
+            if (currentBakedData == null) {
+                throw "No font data to export. Call importFont() first!";
+            }
             
-            // Generate output name from input font path
-            var lastSlash = Std.int(Math.max(fontPath.lastIndexOf("/"), fontPath.lastIndexOf("\\")));
-            var fileName = fontPath.substring(lastSlash + 1);
-            app.log.info(0, 'Extracted fileName: "$fileName"');
+            // Extract just the filename without path for the output name
+            var lastSlash = Std.int(Math.max(outputPath.lastIndexOf("/"), outputPath.lastIndexOf("\\")));
+            var fileName = outputPath.substring(lastSlash + 1);
             
+            // Remove extension if present
             if (fileName.indexOf(".") > 0) {
                 fileName = fileName.substring(0, fileName.lastIndexOf("."));
             }
-            this.outputName = fileName + "_baked";
-            app.log.info(0, 'Generated outputName: "$outputName"');
             
-            // Bake and export to disk
-            app.log.info(0, 'Starting font baking and export...');
-            bakeFontToDisk(fontPath, fontSize, outputName);
+            // Get the directory path
+            var dirPath = outputPath.substring(0, lastSlash + 1);
+            
+            // Store output name
+            this.outputName = fileName;
+            
+            app.log.info(0, 'Exporting current font data as: "$fileName"');
+            app.log.info(0, 'To directory: "$dirPath"');
+            
+            // Export to disk using the full output path
+            currentBakedData.exportToFiles(outputPath);
+            app.log.info(0, "Font exported successfully!");
             
         } catch (e:Dynamic) {
             app.log.error(0, 'Error in exportFont: $e');
@@ -144,9 +155,18 @@ class FontBakerState extends State {
                 fileName = fileName.substring(0, fileName.lastIndexOf("."));
             }
             
+            // Load font bytes from disk only if not cached or different font
+            if (cachedFontBytes == null || cachedFontName != fileName) {
+                app.log.info(0, "Loading font bytes from disk: " + fontPath);
+                cachedFontBytes = sys.io.File.getBytes(fontPath);
+                cachedFontName = fileName;
+            } else {
+                app.log.info(0, "Using cached font bytes for: " + fileName);
+            }
+            
             // Bake font in memory (no file I/O)
-            var bakedData = FontBaker.bakeFont(
-                fontPath,
+            var bakedData = FontBaker.bakeFontFromBytes(
+                cachedFontBytes,
                 fileName,
                 fontSize,
                 512,
@@ -154,57 +174,14 @@ class FontBakerState extends State {
                 32,
                 96
             );
+            
+            // Store for later export
+            currentBakedData = bakedData;
             
             app.log.info(0, "Font baked to RAM, setting up display...");
             setupBakedFontFromData(app.renderer, bakedData);
         } catch (e:Dynamic) {
             app.log.error(0, 'Font RAM baking failed: $e');
-            throw e;
-        }
-    }
-    
-    /**
-     * Bake font and export to disk (JSON + TGA files)
-     */
-    private function bakeFontToDisk(fontPath:String, fontSize:Float, outputName:String):Void {
-        var separator = "";
-        for (i in 0...60) separator += "=";
-        
-        app.log.info(0, separator);
-        app.log.info(0, 'Baking font at ${fontSize}px');
-        app.log.info(0, '  Input: "$fontPath"');
-        app.log.info(0, '  Output: "$outputName"');
-        app.log.info(0, separator);
-        
-        try {
-            // Extract font name from path
-            var lastSlash = Std.int(Math.max(fontPath.lastIndexOf("/"), fontPath.lastIndexOf("\\")));
-            var fileName = fontPath.substring(lastSlash + 1);
-            if (fileName.indexOf(".") > 0) {
-                fileName = fileName.substring(0, fileName.lastIndexOf("."));
-            }
-            
-            // Bake font in memory
-            var bakedData = FontBaker.bakeFont(
-                fontPath,
-                fileName,
-                fontSize,
-                512,
-                512,
-                32,
-                96
-            );
-            
-            app.log.info(0, "Font baked in memory!");
-            
-            // Export to disk
-            bakedData.exportToFiles(outputName);
-            app.log.info(0, "Font exported to disk!");
-            
-            // Display the font
-            setupBakedFontFromData(app.renderer, bakedData);
-        } catch (e:Dynamic) {
-            app.log.error(0, 'Font baking failed: $e');
             throw e;
         }
     }

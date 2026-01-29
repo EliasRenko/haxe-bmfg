@@ -145,8 +145,8 @@ extern "C" {
         Engine::importFont(fontPath, fontSize);
     }
     
-    __declspec(dllexport) void exportFont(const char* fontPath, float fontSize) {
-        Engine::exportFont(fontPath, fontSize);
+    __declspec(dllexport) void exportFont(const char* outputPath) {
+        Engine::exportFont(outputPath);
     }
     
     __declspec(dllexport) void loadFont(const char* outputName) {
@@ -443,20 +443,20 @@ class BMFG_Export {
      * @param fontSize Font size in pixels
      */
     @:keep
-    public static function exportFont(fontPath:String, fontSize:Float):Void {
+    public static function exportFont(outputPath:String):Void {
         if (app == null || !initialized) {
             log("Editor: Cannot export font - engine not initialized");
             return;
         }
         
         try {
-            log('Exporting font: $fontPath at ${fontSize}px');
+            log('Exporting currently imported font to: $outputPath');
             
             // Get the FontBakerState
             var state = app.currentState;
             if (state != null && Std.isOfType(state, FontBakerState)) {
                 var fontState:FontBakerState = cast state;
-                fontState.exportFont(fontPath, fontSize);
+                fontState.exportFont(outputPath);
             } else {
                 log("Editor: Current state is not FontBakerState");
             }

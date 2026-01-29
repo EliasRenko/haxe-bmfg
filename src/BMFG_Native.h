@@ -44,7 +44,7 @@ extern "C" {
     
     // Font operations
     __declspec(dllexport) void importFont(const char* fontPath, float fontSize);
-    __declspec(dllexport) void exportFont(const char* fontPath, float fontSize);
+    __declspec(dllexport) void exportFont(const char* outputPath);
     __declspec(dllexport) void loadFont(const char* outputName);
 }
 
