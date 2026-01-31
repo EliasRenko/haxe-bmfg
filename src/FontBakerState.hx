@@ -78,7 +78,7 @@ class FontBakerState extends State {
     /**
      * Export the currently imported/baked font to disk
      * Must call importFont() first to have font data to export
-     * @param outputPath Full path where to save (e.g., "C:\\fonts\\arial_20" without extension)
+     * @param outputPath Full path where to save (e.g., "C:\\fonts\\arial_20" or with .json extension)
      */
     public function exportFont(outputPath:String):Void {
         app.log.info(0, 'exportFont called with path: "$outputPath"');
@@ -89,17 +89,19 @@ class FontBakerState extends State {
                 throw "No font data to export. Call importFont() first!";
             }
             
-            // Extract just the filename without path for the output name
-            var lastSlash = Std.int(Math.max(outputPath.lastIndexOf("/"), outputPath.lastIndexOf("\\")));
-            var fileName = outputPath.substring(lastSlash + 1);
-            
-            // Remove extension if present
-            if (fileName.indexOf(".") > 0) {
-                fileName = fileName.substring(0, fileName.lastIndexOf("."));
+            // Remove any extension if present (.json or .tga)
+            var basePath = outputPath;
+            var lowerPath = outputPath.toLowerCase();
+            if (StringTools.endsWith(lowerPath, ".json")) {
+                basePath = outputPath.substring(0, outputPath.length - 5);
+            } else if (StringTools.endsWith(lowerPath, ".tga")) {
+                basePath = outputPath.substring(0, outputPath.length - 4);
             }
             
-            // Get the directory path
-            var dirPath = outputPath.substring(0, lastSlash + 1);
+            // Extract just the filename for logging
+            var lastSlash = Std.int(Math.max(basePath.lastIndexOf("/"), basePath.lastIndexOf("\\")));
+            var fileName = basePath.substring(lastSlash + 1);
+            var dirPath = basePath.substring(0, lastSlash + 1);
             
             // Store output name
             this.outputName = fileName;
@@ -107,8 +109,8 @@ class FontBakerState extends State {
             app.log.info(0, 'Exporting current font data as: "$fileName"');
             app.log.info(0, 'To directory: "$dirPath"');
             
-            // Export to disk using the full output path
-            currentBakedData.exportToFiles(outputPath);
+            // Export to disk using the base path (without extension)
+            currentBakedData.exportToFiles(basePath);
             app.log.info(0, "Font exported successfully!");
             
         } catch (e:Dynamic) {

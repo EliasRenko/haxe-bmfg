@@ -137,8 +137,20 @@ extern "C" {
         Engine::engineSetWindowSizeAndBorderless(width, height);
     }
     
-    __declspec(dllexport) void onMouseClick(int x, int y) {
-        Engine::onMouseClick(x, y);
+    __declspec(dllexport) void onMouseButtonDown(int x, int y, int button) {
+        Engine::onMouseButtonDown(x, y, button);
+    }
+
+    __declspec(dllexport) void onMouseButtonUp(int x, int y, int button) {
+        Engine::onMouseButtonUp(x, y, button);
+    }
+
+    __declspec(dllexport) void onKeyboardDown(int keyCode) {
+        Engine::onKeyboardDown(keyCode);
+    }
+
+    __declspec(dllexport) void onKeyboardUp(int keyCode) {
+        Engine::onKeyboardUp(keyCode);
     }
     
     __declspec(dllexport) void importFont(const char* fontPath, float fontSize) {
@@ -398,18 +410,43 @@ class BMFG_Export {
         }
     }
     
+    @:keep
+    public static function onMouseButtonDown(x:Int, y:Int, button:Int):Void {
+        if (app != null && initialized) {
+            @:privateAccess app.onMouseButtonDown(x, y, button, 1);
+        }
+    }
+
+    @:keep
+    public static function onMouseButtonUp(x:Int, y:Int, button:Int):Void {
+        if (app != null && initialized) {
+            @:privateAccess app.onMouseButtonUp(x, y, button, 1);
+        }
+    }
+
     /**
-     * Handle mouse click event from C# host
-     * @param x Mouse X coordinate
-     * @param y Mouse Y coordinate
+     * Handle keyboard down event from C# host
+     * @param scancode SDL scancode of the pressed key (from KeyMapper.ToSDLScancode)
      */
     @:keep
-    public static function onMouseClick(x:Int, y:Int):Void {
+    public static function onKeyboardDown(scancode:Int):Void {
         if (app != null && initialized) {
-            // Forward mouse click to app's input handling
-            log('Mouse click at: $x, $y');
-            // You can implement custom mouse handling here
-            // For example: app.handleMouseClick(x, y);
+            // Pass scancode as keycode since use_scancodes is not defined
+            // and Keycode constants are actually scancode values
+            @:privateAccess app.onKeyDown(scancode, scancode, false, 0, 1);
+        }
+    }
+
+    /**
+     * Handle keyboard up event from C# host
+     * @param scancode SDL scancode of the released key (from KeyMapper.ToSDLScancode)
+     */
+    @:keep
+    public static function onKeyboardUp(scancode:Int):Void {
+        if (app != null && initialized) {
+            // Pass scancode as keycode since use_scancodes is not defined
+            // and Keycode constants are actually scancode values
+            @:privateAccess app.onKeyUp(scancode, scancode, false, 0, 1);
         }
     }
     

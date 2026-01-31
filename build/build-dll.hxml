@@ -17,6 +17,7 @@
 -cpp bin/dll
 
 # DLL-specific flags
+-D debug
 -D dll
 -D dll_link
 -D HXCPP_DLL_EXPORT

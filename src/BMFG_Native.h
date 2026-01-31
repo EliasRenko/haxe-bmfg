@@ -39,8 +39,11 @@ extern "C" {
     __declspec(dllexport) void setWindowSizeAndBorderless(int width, int height);
 
     // Mouse input handling
-    __declspec(dllexport) void onMouseClick(int x, int y);
-    
+    __declspec(dllexport) void onMouseButtonDown(int x, int y, int button);
+    __declspec(dllexport) void onMouseButtonUp(int x, int y, int button);
+    __declspec(dllexport) void onKeyboardDown(int keyCode);
+    __declspec(dllexport) void onKeyboardUp(int keyCode);
+
     // Font operations
     __declspec(dllexport) void importFont(const char* fontPath, float fontSize);
     __declspec(dllexport) void rebakeFont(float fontSize, int atlasWidth, int atlasHeight, int firstChar, int numChars);
