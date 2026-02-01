@@ -8,9 +8,13 @@
 --macro Sys.command("cmd", ["/c", ".\\bat\\copy-files.bat", "res", ".\\bin\\dll\\res"])
 
 # Copy DLL files to C# project (after build completes via --cmd)
---cmd copy bin\\dll\\BMFG_Export-debug.dll C:\\Users\\efedorenko\\Documents\\projects\\csharp\\csharp-bmfg\\bin\\x64\\Debug\\BMFG_Export-debug.dll
---cmd copy bin\\dll\\SDL3.dll C:\\Users\\efedorenko\\Documents\\projects\\csharp\\csharp-bmfg\\bin\\x64\\Debug\\SDL3.dll
---cmd .\\bat\\copy-files.bat bin\\dll\\res C:\\Users\\efedorenko\\Documents\\projects\\csharp\\csharp-bmfg\\bin\\x64\\Debug\\res
+#--cmd copy bin\\dll\\BMFG_Export-debug.dll C:\\Users\\efedorenko\\Documents\\projects\\csharp\\csharp-bmfg\\bin\\x64\\Debug\\BMFG_Export-debug.dll
+#--cmd copy bin\\dll\\SDL3.dll C:\\Users\\efedorenko\\Documents\\projects\\csharp\\csharp-bmfg\\bin\\x64\\Debug\\SDL3.dll
+#--cmd .\\bat\\copy-files.bat bin\\dll\\res C:\\Users\\efedorenko\\Documents\\projects\\csharp\\csharp-bmfg\\bin\\x64\\Debug\\res
+
+--cmd copy bin\\dll\\BMFG_Export-debug.dll C:\\Users\\Renko\\Documents\\Libraries\\csharp-bmfg\\bin\\x64\\Debug\\BMFG_Export-debug.dll
+--cmd copy bin\\dll\\SDL3.dll C:\\Users\\Renko\\Documents\\Libraries\\csharp-bmfg\\bin\\x64\\Debug\\SDL3.dll
+--cmd .\\bat\\copy-files.bat bin\\dll\\res C:\\Users\\Renko\\Documents\\Libraries\\csharp-bmfg\\bin\\x64\\Debug\\res
 
 -cp src
 -main BMFG_Export
